@@ -1,11 +1,12 @@
 '''The application object: one instance, reachable over the session bus.'''
 
+import signal
 import time
 
 import gi
 
 gi.require_version('Gtk', '3.0')
-from gi.repository import Gio, Gtk  # noqa: E402
+from gi.repository import Gio, GLib, Gtk  # noqa: E402
 
 from . import config  # noqa: E402
 from .window import ZettelWindow  # noqa: E402
@@ -15,10 +16,11 @@ class ZettelApplication(Gtk.Application):
     '''Runs from login to logout and does nothing most of the time.
 
     Actions registered here are exported on the session bus automatically,
-    which is what lets the keyboard shortcut reach us without starting a
+    which is what lets the keyboard shortcuts reach us without starting a
     second Python interpreter:
 
         gapplication action io.github.julianbvw.Zettel toggle
+        gapplication action io.github.julianbvw.Zettel scratch
     '''
 
     def __init__(self, verbose=False):
@@ -44,6 +46,7 @@ class ZettelApplication(Gtk.Application):
 
         for name, handler in (
             ('toggle', lambda *_: self.window.toggle()),
+            ('scratch', lambda *_: self.window.scratch()),
             ('show', lambda *_: self.window.show_zettel()),
             ('hide', lambda *_: self.window.hide_zettel()),
             ('quit', lambda *_: self.quit()),
@@ -52,7 +55,25 @@ class ZettelApplication(Gtk.Application):
             action.connect('activate', self._timed(name, handler))
             self.add_action(action)
 
+        # Logging out sends SIGTERM, and Python would die on the spot without
+        # ever reaching do_shutdown. Routed through the main loop instead, so
+        # whatever is on screen still gets written out.
+        GLib.unix_signal_add(GLib.PRIORITY_DEFAULT, signal.SIGTERM,
+                             self._on_sigterm)
+
         self._log('ready')
+
+    def do_shutdown(self):
+        # The last chance to keep what was typed.
+        if self.window is not None:
+            self.window.editor.commit()
+            self._log('committed on shutdown')
+        Gtk.Application.do_shutdown(self)
+
+    def _on_sigterm(self):
+        self._log('SIGTERM')
+        self.quit()  # runs do_shutdown, which saves
+        return GLib.SOURCE_REMOVE
 
     def do_command_line(self, command_line):
         args = command_line.get_arguments()[1:]

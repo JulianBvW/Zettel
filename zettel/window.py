@@ -10,6 +10,7 @@ gi.require_version('Gdk', '3.0')
 from gi.repository import Gdk, Gtk  # noqa: E402
 
 from . import config  # noqa: E402
+from .editor import EditorView  # noqa: E402
 
 # X11-only, and only needed for a fresh server timestamp. Kept optional so the
 # import does not bring the whole program down on a session without it.
@@ -49,6 +50,7 @@ class ZettelWindow(Gtk.Window):
         self.set_position(Gtk.WindowPosition.NONE)
         self.set_default_size(config.WIDTH, config.HEIGHT)
 
+        self._install_css()
         self._rgba = self._setup_transparency()
         self.connect('draw', self._on_draw)
         self.connect('key-press-event', self._on_key_press)
@@ -57,13 +59,27 @@ class ZettelWindow(Gtk.Window):
         # Hide instead -- the only way out is the quit action.
         self.connect('delete-event', lambda *_: self.hide_zettel() or True)
 
-        self.add(self._build_placeholder())
+        self.editor = EditorView(verbose=verbose)
+        self.add(self.editor)
 
         # Realise early so there is a GdkWindow to ask for a server timestamp
         # the first time we are shown.
         self.realize()
 
     # -- appearance ------------------------------------------------------
+
+    def _install_css(self):
+        '''Style sheet for the whole process, not just one widget.
+
+        Per-widget providers do not reach child widgets, and the scrollbar is
+        a sibling of the text view rather than part of it -- which is exactly
+        why it kept the light system theme and flashed white while dragging.
+        '''
+        provider = Gtk.CssProvider()
+        provider.load_from_data(config.CSS)
+        Gtk.StyleContext.add_provider_for_screen(
+            Gdk.Screen.get_default(), provider,
+            Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
 
     def _setup_transparency(self):
         '''Ask for an RGBA visual. Returns True if we actually got one.'''
@@ -88,40 +104,36 @@ class ZettelWindow(Gtk.Window):
         cr.set_operator(cairo.OPERATOR_OVER)
         return False
 
-    def _build_placeholder(self):
-        '''Stand-in for the real content. Phase 2 puts the editor here.'''
-        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
-        box.set_halign(Gtk.Align.CENTER)
-        box.set_valign(Gtk.Align.CENTER)
-
-        label = Gtk.Label()
-        label.set_markup(
-            '<span foreground="#dee2e7" size="large">Zettel</span>\n'
-            '<span foreground="#8b939c">phase 1 — the window</span>'
-        )
-        label.set_justify(Gtk.Justification.CENTER)
-        box.add(label)
-
-        # Here to prove the window really gets keyboard focus when it is
-        # shown from a D-Bus call. Goes away in phase 2.
-        entry = Gtk.Entry()
-        entry.set_placeholder_text('type here to test focus')
-        entry.set_width_chars(24)
-        box.add(entry)
-        self._focus_target = entry
-
-        return box
-
     # -- showing and hiding ----------------------------------------------
 
     def toggle(self):
+        '''F4: open the most recent note, or apply the save rule and close.'''
         if self.get_visible():
             self.hide_zettel()
         else:
             self.show_zettel()
 
-    def show_zettel(self):
+    def scratch(self):
+        '''Shift+F4: a fresh note, or throw this one away.
+
+        Closed, it hands you a blank surface; open, it discards. Together
+        that is the whole clipboard round trip -- open, paste, tidy up, copy
+        out, throw away -- without a file ever existing.
+        '''
+        if self.get_visible():
+            self.hide_zettel(discard=True)
+        else:
+            self.show_zettel(new=True)
+
+    def show_zettel(self, new=False):
         t0 = time.monotonic()
+
+        # Load before mapping, so the note is on screen the moment the window
+        # is. Reading a few kilobytes costs nothing next to that.
+        if new:
+            self.editor.open_new()
+        else:
+            self.editor.open_latest()
 
         # Reposition on every show: X11 window managers are free to place a
         # window when it is mapped, and some do.
@@ -137,14 +149,17 @@ class ZettelWindow(Gtk.Window):
         gdk_window = self.get_window()
         if gdk_window is not None:
             gdk_window.focus(ts)
-        self._focus_target.grab_focus()
+        self.editor.view.grab_focus()
 
         self._log(f'shown in {(time.monotonic() - t0) * 1000:.1f} ms '
                   f'at {self.get_position()}')
 
-    def hide_zettel(self):
+    def hide_zettel(self, discard=False):
+        # Write or delete first, then disappear -- so what is on screen and
+        # what is on disk never disagree, not even for a frame.
+        self.editor.commit(discard=discard)
         self.hide()
-        self._log('hidden')
+        self._log('hidden, discarded' if discard else 'hidden')
 
     def _target_position(self):
         '''Bottom right of the work area -- that is the screen minus panels.

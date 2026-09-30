@@ -52,4 +52,6 @@ Notes are stored as plain text in `~/Notizen/`.
 
 ## Status
 
-Work in progress.
+Work in progress. Writing, saving and reopening notes works; the window is
+plain and holds one note at a time. A list to pick between notes comes next,
+and the styling after that.
