@@ -48,7 +48,7 @@ class ZettelApplication(Gtk.Application):
             ('toggle', lambda *_: self.window.toggle()),
             ('scratch', lambda *_: self.window.scratch()),
             ('show', lambda *_: self.window.show_zettel()),
-            ('hide', lambda *_: self.window.hide_zettel()),
+            ('hide', lambda *_: self.window.close_zettel()),
             ('quit', lambda *_: self.quit()),
         ):
             action = Gio.SimpleAction.new(name, None)
@@ -64,9 +64,11 @@ class ZettelApplication(Gtk.Application):
         self._log('ready')
 
     def do_shutdown(self):
-        # The last chance to keep what was typed.
+        # The last chance to keep what was typed. Through the window, so the
+        # same rule applies as on closing: nothing to do unless a note is
+        # actually open in the editor.
         if self.window is not None:
-            self.window.editor.commit()
+            self.window.commit()
             self._log('committed on shutdown')
         Gtk.Application.do_shutdown(self)
 

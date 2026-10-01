@@ -52,6 +52,15 @@ class EditorView(Gtk.ScrolledWindow):
     # -- the note in the window ------------------------------------------
 
     @property
+    def path(self):
+        '''The note being edited, or None while it has no file.
+
+        The window reads this after commit(): a note thrown away leaves None
+        behind, and the list then has nothing to put its cursor on.
+        '''
+        return self._path
+
+    @property
     def text(self):
         buffer = self.view.get_buffer()
         return buffer.get_text(buffer.get_start_iter(),
@@ -67,6 +76,11 @@ class EditorView(Gtk.ScrolledWindow):
         buffer.begin_not_undoable_action()
         buffer.set_text(text)
         buffer.end_not_undoable_action()
+
+        # set_text() counts as a change, so clear the flag again. From here
+        # on it answers exactly one question: has anything happened since we
+        # last agreed with the file on disk?
+        buffer.set_modified(False)
 
         buffer.place_cursor(buffer.get_end_iter())
         buffer.connect('changed', self._on_changed)
@@ -96,16 +110,20 @@ class EditorView(Gtk.ScrolledWindow):
         self._loaded_mtime[path] = mtime
         return buffer
 
+    def open_note(self, path):
+        '''A particular note, by path.'''
+        self._cancel_autosave()
+        self._path = path
+        self.view.set_buffer(self._buffer_for(path))
+        self._log(f'opened {path.name}')
+
     def open_latest(self):
         '''Whatever was written last. Falls back to a new note.'''
         path = notes.latest()
         if path is None:
             self.open_new()
-            return
-        self._cancel_autosave()
-        self._path = path
-        self.view.set_buffer(self._buffer_for(path))
-        self._log(f'opened {path.name}')
+        else:
+            self.open_note(path)
 
     def open_new(self):
         self._cancel_autosave()
@@ -130,13 +148,18 @@ class EditorView(Gtk.ScrolledWindow):
             self._path = None
             return
 
-        self._write(text)
+        # Only write if something actually changed. Otherwise merely looking
+        # at a note would give it a new modification time and send it to the
+        # top of the list -- reading is not editing.
+        if self.view.get_buffer().get_modified():
+            self._write(text)
 
     def _write(self, text):
         '''Put the text on disk and remember that this is what we have.'''
         if self._path is None:
             self._path = notes.new_path()
         notes.save(self._path, text)
+        self.view.get_buffer().set_modified(False)
 
         # Keep the buffer under its path, and record the mtime we just
         # caused -- otherwise the next open would see a newer file than it

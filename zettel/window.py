@@ -11,6 +11,7 @@ from gi.repository import Gdk, Gtk  # noqa: E402
 
 from . import config  # noqa: E402
 from .editor import EditorView  # noqa: E402
+from .notelist import ListView  # noqa: E402
 
 # X11-only, and only needed for a fresh server timestamp. Kept optional so the
 # import does not bring the whole program down on a session without it.
@@ -57,10 +58,27 @@ class ZettelWindow(Gtk.Window):
 
         # Closing the window would destroy it and cost us the instant reopen.
         # Hide instead -- the only way out is the quit action.
-        self.connect('delete-event', lambda *_: self.hide_zettel() or True)
+        self.connect('delete-event', lambda *_: self.close_zettel() or True)
 
         self.editor = EditorView(verbose=verbose)
-        self.add(self.editor)
+        self.list = ListView(verbose=verbose)
+        self.list.on_choose = self.open_note
+        self.list.on_new = self.new_note
+
+        # Two contents, one window. The stack swaps them without a new window,
+        # without a rebuild and without a change in size -- so switching views
+        # costs exactly one redraw and nothing moves.
+        self._stack = Gtk.Stack()
+        self._stack.set_transition_type(Gtk.StackTransitionType.NONE)
+        self._stack.add_named(self.list, 'list')
+        self._stack.add_named(self.editor, 'editor')
+        self.add(self._stack)
+
+        # The stack refuses to switch to a child that is not visible itself,
+        # and a widget being visible does not put it on screen -- that only
+        # happens once the window is mapped. So show the contents now and let
+        # the window decide when anything is seen.
+        self._stack.show_all()
 
         # Realise early so there is a GdkWindow to ask for a server timestamp
         # the first time we are shown.
@@ -107,9 +125,9 @@ class ZettelWindow(Gtk.Window):
     # -- showing and hiding ----------------------------------------------
 
     def toggle(self):
-        '''F4: open the most recent note, or apply the save rule and close.'''
+        '''F4: open the list, or apply the save rule and close.'''
         if self.get_visible():
-            self.hide_zettel()
+            self.close_zettel()
         else:
             self.show_zettel()
 
@@ -121,19 +139,19 @@ class ZettelWindow(Gtk.Window):
         out, throw away -- without a file ever existing.
         '''
         if self.get_visible():
-            self.hide_zettel(discard=True)
+            self.close_zettel(discard=True)
         else:
             self.show_zettel(new=True)
 
     def show_zettel(self, new=False):
         t0 = time.monotonic()
 
-        # Load before mapping, so the note is on screen the moment the window
-        # is. Reading a few kilobytes costs nothing next to that.
+        # Fill before mapping, so the content is on screen the moment the
+        # window is. Reading a few kilobytes costs nothing next to that.
         if new:
-            self.editor.open_new()
+            self.new_note()
         else:
-            self.editor.open_latest()
+            self.show_list()
 
         # Reposition on every show: X11 window managers are free to place a
         # window when it is mapped, and some do.
@@ -149,17 +167,68 @@ class ZettelWindow(Gtk.Window):
         gdk_window = self.get_window()
         if gdk_window is not None:
             gdk_window.focus(ts)
-        self.editor.view.grab_focus()
+        self._focus_view()
 
         self._log(f'shown in {(time.monotonic() - t0) * 1000:.1f} ms '
                   f'at {self.get_position()}')
 
-    def hide_zettel(self, discard=False):
+    def close_zettel(self, discard=False):
         # Write or delete first, then disappear -- so what is on screen and
         # what is on disk never disagree, not even for a frame.
-        self.editor.commit(discard=discard)
+        self.commit(discard=discard)
         self.hide()
         self._log('hidden, discarded' if discard else 'hidden')
+
+    def commit(self, discard=False):
+        '''The save rule, but only when a note is actually being edited.
+
+        Coming from the list there is nothing to write: Alt+Left already
+        committed on the way out of the editor.
+        '''
+        if self._editing:
+            self.editor.commit(discard=discard)
+
+    # -- the two views ---------------------------------------------------
+
+    @property
+    def _editing(self):
+        return self._stack.get_visible_child_name() == 'editor'
+
+    def show_list(self, mark=None):
+        '''Show the list, cursor on `mark`.
+
+        With no notes at all the list would be an empty rectangle and a dead
+        end for anyone who does not know the ` key by heart, so that case
+        goes straight into a new note instead.
+        '''
+        if not self.list.reload(mark):
+            self.new_note()
+            return
+        self._stack.set_visible_child_name('list')
+        self._focus_view()
+
+    def new_note(self):
+        self.editor.open_new()
+        self._stack.set_visible_child_name('editor')
+        self._focus_view()
+
+    def open_note(self, path):
+        self.editor.open_note(path)
+        self._stack.set_visible_child_name('editor')
+        self._focus_view()
+
+    def back_to_list(self, discard=False):
+        '''Alt+Left: the same save rule as F4, but back instead of away.'''
+        self.editor.commit(discard=discard)
+        # After commit the path is None if the note was thrown away -- then
+        # there is nothing left for the cursor to sit on.
+        self.show_list(mark=self.editor.path)
+
+    def _focus_view(self):
+        if self._editing:
+            self.editor.view.grab_focus()
+        else:
+            self.list.focus_cursor()
 
     def _target_position(self):
         '''Bottom right of the work area -- that is the screen minus panels.
@@ -192,13 +261,27 @@ class ZettelWindow(Gtk.Window):
     # -- input -----------------------------------------------------------
 
     def _on_key_press(self, _widget, event):
+        # This runs before the focused widget sees the key, which is what
+        # makes Alt+Left reliable -- the text view would otherwise treat it as
+        # a cursor movement. For the same reason the digits are only taken
+        # when the list is up: in the editor they are just characters.
+        #
         # Esc closes. F4 is deliberately not handled here: the global shortcut
         # is a passive grab on the root window, so that key press never reaches
         # us at all -- both directions run through the same action.
         if event.keyval == Gdk.KEY_Escape:
-            self.hide_zettel()
+            self.close_zettel()
             return True
-        return False
+
+        if self._editing:
+            if event.keyval in (Gdk.KEY_Left, Gdk.KEY_KP_Left) \
+                    and event.state & Gdk.ModifierType.MOD1_MASK:
+                discard = bool(event.state & Gdk.ModifierType.SHIFT_MASK)
+                self.back_to_list(discard=discard)
+                return True
+            return False
+
+        return self.list.handle_key(event)
 
     # -- misc ------------------------------------------------------------
 

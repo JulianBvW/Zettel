@@ -50,8 +50,18 @@ have.
 
 Notes are stored as plain text in `~/Notizen/`.
 
+## Tests
+
+No test runner to install. Run either file directly:
+
+```
+/usr/bin/python3 tests/test_notes.py               # storage, no display needed
+DISPLAY=:0 /usr/bin/python3 tests/test_saverule.py # drives the editor
+```
+
 ## Status
 
-Work in progress. Writing, saving and reopening notes works; the window is
-plain and holds one note at a time. A list to pick between notes comes next,
-and the styling after that.
+Work in progress. Every key in the table above works, and the list is there:
+notes sorted by when you last changed them, titled by their own first line.
+Still to come is the real styling, resizing the window with the mouse, and a
+panel icon.

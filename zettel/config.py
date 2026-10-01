@@ -26,6 +26,22 @@ AUTOSAVE_DELAY_MS = 500
 EDITOR_MARGIN_X = 24
 EDITOR_MARGIN_Y = 22
 
+# The list. Slightly less room on the right because the scrollbar floats
+# there.
+LIST_MARGIN_LEFT = 18
+LIST_MARGIN_RIGHT = 14
+LIST_MARGIN_Y = 20
+ROW_SPACING = 13  # between tile, title and date
+TILE_SIZE = 24
+
+# Nine notes get a digit. Beyond that the tile goes empty and dashed: the
+# friction is the reminder to tidy up, and those rows are still reachable
+# with the arrow keys.
+NUMBERED_ROWS = 9
+
+# A note that is nothing but blank lines has no first line to show.
+EMPTY_TITLE = '\u2014'
+
 # The bare minimum to stay legible on our own dark background. Without this
 # the system theme (Mint-Y-Blue, a light one) paints dark text and a nearly
 # white scrollbar on it -- measured at rgba(0.99, 0.99, 0.99, 0.98). The full
@@ -75,6 +91,100 @@ scrollbar slider:hover:active {
 scrollbar.overlay-indicator:not(.dragging):not(.hovering) slider {
     background-color: rgba(255, 255, 255, 0.18);
     min-width: 4px;
+}
+
+/* -- the list ----------------------------------------------------------
+   Same job as the scrollbar rules above: the system theme paints list rows
+   on a light background, which is unreadable on our dark glass. Strictly
+   this is phase 4 work, pulled forward because an unstyled list is not
+   something you can look at long enough to test the rest. */
+list.note-list,
+list.note-list row {
+    background-color: transparent;
+    background-image: none;
+    border: none;
+    box-shadow: none;
+}
+
+list.note-list row.note {
+    padding: 7px 8px;
+    margin-bottom: 4px;
+    border-radius: 9px;
+    outline: none;
+}
+
+/* One mark, not two: this is both the keyboard cursor and "the note you
+   are about to open". */
+list.note-list row.note:selected {
+    background-color: rgba(255, 255, 255, 0.07);
+}
+
+.tile {
+    background-color: rgba(255, 255, 255, 0.08);
+    background-image: none;
+    border-radius: 7px;
+    color: #aeb5bd;
+    font-family: monospace;
+    font-size: 12px;
+}
+
+/* One of exactly two places the accent colour appears; the other is the
+   text cursor. */
+list.note-list row.note:selected .tile {
+    background-color: #5294e2;
+    color: #0f1216;
+}
+
+/* The colours below all sit on the label nodes rather than on the row. The
+   system theme styles `label` directly, and a colour inherited from the row
+   never gets a say against a rule that matches the label itself -- which is
+   what painted the titles in the theme's blue. */
+
+list.note-list row.note.overflow .tile {
+    background-color: transparent;
+    border: 1px dashed rgba(255, 255, 255, 0.14);
+    color: #7d858e;
+}
+
+list.note-list row.note.overflow:selected .tile {
+    background-color: #5294e2;
+    border-color: #5294e2;
+    color: #0f1216;
+}
+
+.note-title {
+    font-size: 13px;
+    color: #dee2e7;
+}
+
+list.note-list row.note:selected .note-title {
+    color: #ffffff;
+}
+
+.note-date {
+    font-size: 11px;
+    color: #8b939c;
+}
+
+list.note-list row.note:selected .note-date {
+    color: #a7aeb6;
+}
+
+/* A step paler beyond nine, so the eye sorts them out by itself. */
+list.note-list row.note.overflow .note-title {
+    color: #b5bcc4;
+}
+
+list.note-list row.note.overflow .note-date {
+    color: #7d858e;
+}
+
+list.note-list row.note.overflow:selected .note-title {
+    color: #ffffff;
+}
+
+list.note-list row.note.overflow:selected .note-date {
+    color: #a7aeb6;
 }
 '''
 
