@@ -1,5 +1,6 @@
 '''The window itself: transparent, undecorated, parked in the bottom right.'''
 
+import math
 import time
 
 import cairo
@@ -113,14 +114,54 @@ class ZettelWindow(Gtk.Window):
 
     def _on_draw(self, _widget, cr):
         r, g, b, a = config.BG_RGBA
-        cr.set_operator(cairo.OPERATOR_SOURCE)
-        if self._rgba:
-            cr.set_source_rgba(r, g, b, a)
-        else:
+
+        if not self._rgba:
+            # No alpha channel to work with. Rounded corners would be four
+            # black wedges, so stay square and opaque.
+            cr.set_operator(cairo.OPERATOR_SOURCE)
             cr.set_source_rgb(r, g, b)
+            cr.paint()
+            cr.set_operator(cairo.OPERATOR_OVER)
+            return False
+
+        # Wipe the whole surface to nothing first. Filling only the rounded
+        # path would leave whatever was outside it standing -- the corners
+        # have to be made transparent on purpose.
+        cr.set_operator(cairo.OPERATOR_SOURCE)
+        cr.set_source_rgba(0, 0, 0, 0)
         cr.paint()
         cr.set_operator(cairo.OPERATOR_OVER)
+
+        width = self.get_allocated_width()
+        height = self.get_allocated_height()
+        radius = config.CORNER_RADIUS
+
+        # The pane, filled right out to the edge.
+        self._rounded_rect(cr, 0, 0, width, height, radius)
+        cr.set_source_rgba(r, g, b, a)
+        cr.fill()
+
+        # The hairline, on a path of its own half a pixel further in. A one
+        # pixel line is drawn centred on its path, so only there does it land
+        # on one whole row of pixels instead of smearing across two. Filling
+        # and stroking the same path would leave the outermost row half
+        # covered, and the edge would read as washed out rather than drawn.
+        self._rounded_rect(cr, 0.5, 0.5, width - 1, height - 1, radius - 0.5)
+        cr.set_source_rgba(*config.BORDER_RGBA)
+        cr.set_line_width(1)
+        cr.stroke()
         return False
+
+    @staticmethod
+    def _rounded_rect(cr, x, y, width, height, radius):
+        '''A rectangle with rounded corners as the current path.'''
+        radius = min(radius, width / 2, height / 2)
+        cr.new_sub_path()
+        cr.arc(x + width - radius, y + radius, radius, -math.pi / 2, 0)
+        cr.arc(x + width - radius, y + height - radius, radius, 0, math.pi / 2)
+        cr.arc(x + radius, y + height - radius, radius, math.pi / 2, math.pi)
+        cr.arc(x + radius, y + radius, radius, math.pi, 3 * math.pi / 2)
+        cr.close_path()
 
     # -- showing and hiding ----------------------------------------------
 

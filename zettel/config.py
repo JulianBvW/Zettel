@@ -15,8 +15,14 @@ WIDTH = 512
 HEIGHT = 660
 MARGIN = 24  # distance to the edges of the work area
 
-# Provisional background until phase 4 brings the real styling.
+# The pane itself: dark anthracite, a hairline edge, softly rounded corners.
 BG_RGBA = (24 / 255, 28 / 255, 34 / 255, 0.72)
+BORDER_RGBA = (1.0, 1.0, 1.0, 0.10)
+CORNER_RADIUS = 16
+
+# Without a blurred backdrop, 72 % over a busy wallpaper is hard to read.
+# Not used yet -- the installer in phase 6 picks between the two.
+BG_RGBA_NO_BLUR = (24 / 255, 28 / 255, 34 / 255, 0.88)
 
 # How long the typing has to pause before the note is written out.
 AUTOSAVE_DELAY_MS = 500
@@ -25,6 +31,11 @@ AUTOSAVE_DELAY_MS = 500
 # window edge is hard to read.
 EDITOR_MARGIN_X = 24
 EDITOR_MARGIN_Y = 22
+
+# As a factor of the font's own line height, so it follows the system font
+# size. 1.0 is what the font asks for; the Design-Ref wanted 1.6, which cost
+# a quarter of the visible lines -- too much for reading a stack trace.
+EDITOR_LINE_HEIGHT = 1.3
 
 # The list. Slightly less room on the right because the scrollbar floats
 # there.

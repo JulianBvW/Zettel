@@ -50,6 +50,40 @@ have.
 
 Notes are stored as plain text in `~/Notizen/`.
 
+## Blur, if you want it
+
+Zettel paints itself translucent, which is all a program can do: an X11
+window owns only its own buffer and never sees what is behind it. Blurring
+the backdrop is the compositor's job.
+
+Entirely optional, and only on Cinnamon with the
+[BlurCinnamon](https://cinnamon-spices.linuxmint.com/extensions) extension
+installed. Without it Zettel works exactly the same and is simply see-through
+rather than frosted.
+
+In the extension's settings, under *Component specific settings* → *Windows*,
+switch on *Enable window effects* and add an entry:
+
+| Field | Value |
+|---|---|
+| Application | `Zettel` |
+| Custom | on |
+| Opacity | 100 |
+| Dim | 0 |
+| Background | Dual Kawase dynamic blur |
+| Intensity | 18 |
+| Saturation | 125 |
+| Corner Radius | 16 |
+| Rounded Top / Bottom | both on |
+
+*Opacity* fades the whole window including the text, and *Dim* darkens the
+backdrop a second time — Zettel already brings its own 72 %, so leave both
+alone. The corner radius has to match the window's own 16 px, or the blur
+pokes out past the rounded corner.
+
+Without a blurred backdrop, 72 % over a busy wallpaper is hard to read.
+`BG_RGBA_NO_BLUR` in `zettel/config.py` holds a denser value for that case.
+
 ## Tests
 
 No test runner to install. Run either file directly:
@@ -61,7 +95,11 @@ DISPLAY=:0 /usr/bin/python3 tests/test_saverule.py # drives the editor
 
 ## Status
 
-Work in progress. Every key in the table above works, and the list is there:
-notes sorted by when you last changed them, titled by their own first line.
-Still to come is the real styling, resizing the window with the mouse, and a
-panel icon.
+Work in progress, but usable. Every key in the table above works, the list is
+there — notes sorted by when you last changed them, titled by their own first
+line — and the window looks the way it is meant to.
+
+Still to come: resizing it with the mouse and remembering that size, an icon
+in the panel as a way in when the shortcut ever fails, deleting a note from
+the list, and a setup script so it can be installed somewhere other than the
+machine it was written on.

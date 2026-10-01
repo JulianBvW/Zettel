@@ -6,7 +6,8 @@ import gi
 
 gi.require_version('Gtk', '3.0')
 gi.require_version('GtkSource', '4')
-from gi.repository import GLib, Gtk, GtkSource  # noqa: E402
+gi.require_version('Pango', '1.0')
+from gi.repository import GLib, Gtk, GtkSource, Pango  # noqa: E402
 
 from . import config, notes  # noqa: E402
 
@@ -39,6 +40,7 @@ class EditorView(Gtk.ScrolledWindow):
         self.view.set_right_margin(config.EDITOR_MARGIN_X)
         self.view.set_top_margin(config.EDITOR_MARGIN_Y)
         self.view.set_bottom_margin(config.EDITOR_MARGIN_Y)
+        self.view.set_pixels_below_lines(self._extra_line_spacing())
 
         # Overlay scrolling on purpose: the scrollbar floats above the right
         # padding instead of taking layout space, so the text never shifts
@@ -48,6 +50,17 @@ class EditorView(Gtk.ScrolledWindow):
         self.add(self.view)
 
         self.view.set_buffer(self._make_buffer(''))
+
+    def _extra_line_spacing(self):
+        '''How much room to add under each line, in pixels.
+
+        GTK 3 CSS has no line-height, so the view has to be told in pixels.
+        Computed from the font's own metrics rather than written down, so the
+        spacing follows along if the system font size changes.
+        '''
+        metrics = self.view.get_pango_context().get_metrics(None, None)
+        natural = (metrics.get_ascent() + metrics.get_descent()) // Pango.SCALE
+        return max(0, round(natural * (config.EDITOR_LINE_HEIGHT - 1)))
 
     # -- the note in the window ------------------------------------------
 
