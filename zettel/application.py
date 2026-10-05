@@ -9,6 +9,7 @@ gi.require_version('Gtk', '3.0')
 from gi.repository import Gio, GLib, Gtk  # noqa: E402
 
 from . import config  # noqa: E402
+from .panelicon import PanelIcon  # noqa: E402
 from .window import ZettelWindow  # noqa: E402
 
 
@@ -30,6 +31,7 @@ class ZettelApplication(Gtk.Application):
         )
         self._verbose = verbose
         self.window = None
+        self.panel_icon = None
 
     # -- lifecycle -------------------------------------------------------
 
@@ -43,6 +45,10 @@ class ZettelApplication(Gtk.Application):
 
         self.window = ZettelWindow(verbose=self._verbose)
         self.add_window(self.window)
+
+        # The way in when the shortcut is not there. Kept after the window,
+        # because clicking it needs a window to toggle.
+        self.panel_icon = PanelIcon(self, verbose=self._verbose)
 
         for name, handler in (
             ('toggle', lambda *_: self.window.toggle()),

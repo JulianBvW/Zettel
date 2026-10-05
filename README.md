@@ -30,6 +30,13 @@ you close it.
 | `Alt`+`←` | back to the list |
 | `Esc` | close |
 
+There is also an icon in the panel: left click opens and closes it, right
+click offers the notes folder and a way to quit. It is there for the day the
+shortcut does not fire.
+
+Drag any edge or corner to resize, `Alt`+drag to move it. Where you put it and
+how big you made it are remembered, in `~/.config/zettel/state.json`.
+
 Leaving saves the note if there is anything in it, and drops it if there
 isn't. Holding `Shift` always discards. Emptying a note and closing it deletes
 it — that is the only way to delete, and it needs no button.
@@ -90,6 +97,7 @@ No test runner to install. Run either file directly:
 
 ```
 /usr/bin/python3 tests/test_notes.py               # storage, no display needed
+/usr/bin/python3 tests/test_state.py               # window geometry, likewise
 DISPLAY=:0 /usr/bin/python3 tests/test_saverule.py # drives the editor
 ```
 
@@ -99,7 +107,6 @@ Work in progress, but usable. Every key in the table above works, the list is
 there — notes sorted by when you last changed them, titled by their own first
 line — and the window looks the way it is meant to.
 
-Still to come: resizing it with the mouse and remembering that size, an icon
-in the panel as a way in when the shortcut ever fails, deleting a note from
-the list, and a setup script so it can be installed somewhere other than the
-machine it was written on.
+Still to come: deleting a note straight from the list, right-click to copy and
+paste the way a terminal does, and a setup script so it can be installed
+somewhere other than the machine it was written on.

@@ -10,10 +10,25 @@ APP_ID = 'io.github.julianbvw.Zettel'
 PRG_NAME = 'zettel'       # instance name  -> WM_CLASS field 1
 PROGRAM_CLASS = 'Zettel'  # class name     -> WM_CLASS field 2
 
-# Window geometry. Becomes a starting value once phase 5 makes it resizable.
+# Where the window starts out. Only a starting value: size and position are
+# free to change and are remembered from then on.
 WIDTH = 512
 HEIGHT = 660
 MARGIN = 24  # distance to the edges of the work area
+
+# Below this the window is no use to anyone, so the resize stops there.
+MIN_WIDTH = 320
+MIN_HEIGHT = 240
+
+# The invisible band along each edge that starts a resize. Six rather than the
+# eight the Design-Ref suggests: the scrollbar slider sits 6 px in from the
+# right, and an 8 px band would cover its outer half -- dragging the scrollbar
+# would then resize the window. The corners are bigger so they stay hittable.
+GRIP_WIDTH = 6
+GRIP_CORNER = 16
+
+# How long the window has to sit still before its size and place are written.
+STATE_SAVE_DELAY_MS = 400
 
 # The pane itself: dark anthracite, a hairline edge, softly rounded corners.
 BG_RGBA = (24 / 255, 28 / 255, 34 / 255, 0.72)
@@ -198,6 +213,10 @@ list.note-list row.note.overflow:selected .note-date {
     color: #a7aeb6;
 }
 '''
+
+# A plain, themed icon so it follows the panel's colour. Not a brand mark:
+# the panel is read by shape, not by name.
+PANEL_ICON = 'accessories-text-editor-symbolic'
 
 # Where the notes live. Phase 6 makes the folder name configurable.
 NOTES_DIR = Path.home() / 'Notizen'

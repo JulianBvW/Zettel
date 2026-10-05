@@ -8,9 +8,9 @@ import gi
 
 gi.require_version('Gtk', '3.0')
 gi.require_version('Gdk', '3.0')
-from gi.repository import Gdk, Gtk  # noqa: E402
+from gi.repository import Gdk, GLib, Gtk  # noqa: E402
 
-from . import config  # noqa: E402
+from . import config, grips, state  # noqa: E402
 from .editor import EditorView  # noqa: E402
 from .notelist import ListView  # noqa: E402
 
@@ -35,6 +35,14 @@ class ZettelWindow(Gtk.Window):
         super().__init__(type=Gtk.WindowType.TOPLEVEL)
         self._verbose = verbose
 
+        self._state = state.load()
+        self._save_source = None   # GLib source id of a pending state write
+        self._saved = None         # the geometry already on disk
+        if self._state['x'] is not None:
+            # Already on disk, so starting up need not write it again.
+            self._saved = (self._state['x'], self._state['y'],
+                           self._state['width'], self._state['height'])
+
         self.set_title('Zettel')
         self.set_decorated(False)
 
@@ -50,12 +58,21 @@ class ZettelWindow(Gtk.Window):
 
         # We place the window ourselves; do not let GTK centre it.
         self.set_position(Gtk.WindowPosition.NONE)
-        self.set_default_size(config.WIDTH, config.HEIGHT)
+        self.set_default_size(self._state['width'], self._state['height'])
+
+        # A floor for the resize, stated as a window manager hint rather than
+        # a widget size request, so it constrains the drag rather than the
+        # layout inside.
+        floor = Gdk.Geometry()
+        floor.min_width = config.MIN_WIDTH
+        floor.min_height = config.MIN_HEIGHT
+        self.set_geometry_hints(None, floor, Gdk.WindowHints.MIN_SIZE)
 
         self._install_css()
         self._rgba = self._setup_transparency()
         self.connect('draw', self._on_draw)
         self.connect('key-press-event', self._on_key_press)
+        self.connect('configure-event', self._on_configure)
 
         # Closing the window would destroy it and cost us the instant reopen.
         # Hide instead -- the only way out is the quit action.
@@ -73,13 +90,19 @@ class ZettelWindow(Gtk.Window):
         self._stack.set_transition_type(Gtk.StackTransitionType.NONE)
         self._stack.add_named(self.list, 'list')
         self._stack.add_named(self.editor, 'editor')
-        self.add(self._stack)
+
+        # The grab zones for resizing have to lie over the contents, because
+        # the text view handles button presses itself and would swallow them.
+        self._overlay = Gtk.Overlay()
+        self._overlay.add(self._stack)
+        grips.install(self, self._overlay)
+        self.add(self._overlay)
 
         # The stack refuses to switch to a child that is not visible itself,
         # and a widget being visible does not put it on screen -- that only
         # happens once the window is mapped. So show the contents now and let
         # the window decide when anything is seen.
-        self._stack.show_all()
+        self._overlay.show_all()
 
         # Realise early so there is a GdkWindow to ask for a server timestamp
         # the first time we are shown.
@@ -196,7 +219,7 @@ class ZettelWindow(Gtk.Window):
 
         # Reposition on every show: X11 window managers are free to place a
         # window when it is mapped, and some do.
-        self.move(*self._target_position())
+        self.move(*self._placement())
         self.show_all()
 
         # A window shown from a D-Bus call has no user event behind it, so the
@@ -217,6 +240,11 @@ class ZettelWindow(Gtk.Window):
         # Write or delete first, then disappear -- so what is on screen and
         # what is on disk never disagree, not even for a frame.
         self.commit(discard=discard)
+        # A resize in the last fraction of a second still has its write
+        # pending. Do it now, while there is still a window to ask.
+        if self._save_source is not None:
+            self._cancel_state_save()
+            self._save_state()
         self.hide()
         self._log('hidden, discarded' if discard else 'hidden')
 
@@ -270,6 +298,64 @@ class ZettelWindow(Gtk.Window):
             self.editor.view.grab_focus()
         else:
             self.list.focus_cursor()
+
+    # -- size and place --------------------------------------------------
+
+    def _placement(self):
+        '''Where you last left it, or the default corner.'''
+        x, y = self._state['x'], self._state['y']
+        if x is not None and self._fits(x, y):
+            return x, y
+        return self._target_position()
+
+    def _fits(self, x, y):
+        '''Does the whole window land inside a work area?
+
+        A remembered place is checked rather than believed: unplug the second
+        monitor, change the resolution or move the panel, and the coordinates
+        in state.json point somewhere that no longer exists.
+        '''
+        width, height = self.get_size()
+        monitor = Gdk.Display.get_default().get_monitor_at_point(
+            x + width // 2, y + height // 2)
+        if monitor is None:
+            return False
+        area = monitor.get_workarea()
+        return (x >= area.x and y >= area.y
+                and x + width <= area.x + area.width
+                and y + height <= area.y + area.height)
+
+    def _on_configure(self, _widget, _event):
+        '''Moved or resized. Write it down, but not on every single step.
+
+        A drag produces a stream of these; debouncing turns the whole gesture
+        into one write instead of dozens.
+        '''
+        if self.get_visible():
+            self._cancel_state_save()
+            self._save_source = GLib.timeout_add(
+                config.STATE_SAVE_DELAY_MS, self._save_state)
+        return False
+
+    def _save_state(self):
+        self._save_source = None
+        if not self.get_visible():
+            # A hidden window has no honest position to report.
+            return GLib.SOURCE_REMOVE
+
+        geometry = (*self.get_position(), *self.get_size())
+        if geometry != self._saved:
+            state.save(*geometry)
+            self._saved = geometry
+            (self._state['x'], self._state['y'],
+             self._state['width'], self._state['height']) = geometry
+            self._log(f'remembered {geometry}')
+        return GLib.SOURCE_REMOVE
+
+    def _cancel_state_save(self):
+        if self._save_source is not None:
+            GLib.source_remove(self._save_source)
+            self._save_source = None
 
     def _target_position(self):
         '''Bottom right of the work area -- that is the screen minus panels.
