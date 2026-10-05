@@ -10,6 +10,31 @@ said last time.
 
 ![The list of notes, floating over a blurred desktop](docs/screenshot.png)
 
+## Install
+
+```
+git clone git@github.com:JulianBvW/Zettel.git
+cd Zettel
+/usr/bin/python3 install.py
+```
+
+It asks five things and suggests an answer to each, so Enter all the way
+through is a reasonable install. The notes folder is named in your own
+language, the window is sized from your screen, and the shortcut is checked
+against the ones your desktop already holds before it is taken.
+
+`/usr/bin/python3`, not `python3`: on a machine with conda or miniforge in the
+PATH the latter has no `gi`, and the script says so rather than failing at the
+next login.
+
+The package is copied to `~/.local/share/zettel`, so the clone can be moved or
+deleted afterwards. `--in-place` wires it to the current folder instead, which
+is what you want while working on it. `--uninstall` takes everything back off
+and leaves the notes alone.
+
+Cinnamon only, for now: the shortcut and the panel icon both go through
+Cinnamon's own interfaces.
+
 ## Why
 
 For the note that lives two minutes, and for the one that stays two weeks.
@@ -109,6 +134,8 @@ No test runner to install. Run either file directly:
 ```
 /usr/bin/python3 tests/test_notes.py               # storage, no display needed
 /usr/bin/python3 tests/test_state.py               # window geometry, likewise
+/usr/bin/python3 tests/test_config.py              # the settings file
+/usr/bin/python3 tests/test_install.py             # what the installer works out
 DISPLAY=:0 /usr/bin/python3 tests/test_saverule.py # drives the editor
 ```
 
@@ -118,7 +145,13 @@ Work in progress, but usable. Every key in the table above works, the list is
 there — notes sorted by when you last changed them, titled by their own first
 line — and the window looks the way it is meant to.
 
-Everything in the table above works. Still to come is a setup script, so it
-can be installed somewhere other than the machine it was written on: the notes
-folder is named in German, the window size suits one particular screen, and
-the shortcut is wired up by hand.
+Finished, and in daily use. What it does is in the table above; what it will
+never do is in the next section.
+
+## What it will not do
+
+No formatting, no Markdown rendering, no syntax highlighting. No search, no
+tags, no folders. No synchronisation. No settings window. No buttons, no
+toolbar, no menu bar, no title bar.
+
+Every one of those is an invitation to turn a slip of paper into an editor.

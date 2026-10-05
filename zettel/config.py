@@ -1,5 +1,11 @@
-'''Constants and paths, all in one place.'''
+'''Constants and paths, all in one place.
 
+Everything here is a default. The installer writes the few that depend on the
+machine into `~/.config/zettel/config.json`, which is read at the bottom of
+this file. A file is not a settings dialog, so the non-goal stands.
+'''
+
+import json
 from pathlib import Path
 
 # D-Bus name. Also what `gapplication action <APP_ID> toggle` addresses.
@@ -15,6 +21,12 @@ PROGRAM_CLASS = 'Zettel'  # class name     -> WM_CLASS field 2
 WIDTH = 512
 HEIGHT = 660
 MARGIN = 24  # distance to the edges of the work area
+
+# Which corner the window starts in. Only ever decides the very first
+# appearance and the fallback when a remembered place no longer fits -- after
+# that it stays where it was put.
+CORNER = 'bottom-right'
+CORNERS = ('bottom-right', 'bottom-left', 'top-right', 'top-left')
 
 # Below this the window is no use to anyone, so the resize stops there.
 MIN_WIDTH = 320
@@ -218,6 +230,53 @@ list.note-list row.note.overflow:selected .note-date {
 # the panel is read by shape, not by name.
 PANEL_ICON = 'accessories-text-editor-symbolic'
 
-# Where the notes live. Phase 6 makes the folder name configurable.
+# Where the notes live. The installer asks, and the answer lands in
+# config.json -- the folder name is the one thing in the whole program that is
+# in the user's language.
 NOTES_DIR = Path.home() / 'Notizen'
 STATE_FILE = Path.home() / '.config' / 'zettel' / 'state.json'
+CONFIG_FILE = Path.home() / '.config' / 'zettel' / 'config.json'
+
+
+def _apply_user_config():
+    '''Let config.json override the few defaults that depend on the machine.
+
+    As suspicious as state.load(), and for a stronger reason: a program that
+    will not start because of its settings file is worse than one running with
+    the wrong settings. Anything missing, unreadable, malformed or of the
+    wrong type simply leaves the default standing.
+    '''
+    global NOTES_DIR, WIDTH, HEIGHT, CORNER, BG_RGBA
+
+    try:
+        settings = json.loads(CONFIG_FILE.read_text(encoding='utf-8'))
+    except (OSError, ValueError):
+        return
+    if not isinstance(settings, dict):
+        return
+
+    folder = settings.get('notes_dir')
+    if isinstance(folder, str) and folder.strip():
+        NOTES_DIR = Path(folder).expanduser()
+
+    for key, name in (('width', 'WIDTH'), ('height', 'HEIGHT')):
+        value = settings.get(key)
+        # bool is an int to Python, and not one we want here.
+        if isinstance(value, int) and not isinstance(value, bool):
+            globals()[name] = value
+
+    corner = settings.get('corner')
+    if corner in CORNERS:
+        CORNER = corner
+
+    # Without a blurred backdrop the window has to carry more of the contrast
+    # itself, or text over a busy wallpaper is hard to read.
+    blur = settings.get('blur')
+    if isinstance(blur, bool):
+        BG_RGBA = BG_RGBA if blur else BG_RGBA_NO_BLUR
+
+    WIDTH = max(MIN_WIDTH, WIDTH)
+    HEIGHT = max(MIN_HEIGHT, HEIGHT)
+
+
+_apply_user_config()

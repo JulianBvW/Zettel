@@ -380,10 +380,12 @@ class ZettelWindow(Gtk.Window):
             self._save_source = None
 
     def _target_position(self):
-        '''Bottom right of the work area -- that is the screen minus panels.
+        '''The chosen corner of the work area -- the screen minus panels.
 
         Asking for the work area means the panel height is never written down
-        anywhere, and the position stays right if the panel ever changes.
+        anywhere, and the position stays right if the panel ever changes. Which
+        corner comes from config.json, because someone with a panel at the top
+        wants the other end.
         '''
         display = Gdk.Display.get_default()
         gdk_window = self.get_window()
@@ -392,10 +394,20 @@ class ZettelWindow(Gtk.Window):
         else:
             monitor = display.get_primary_monitor() or display.get_monitor(0)
 
-        wa = monitor.get_workarea()
+        area = monitor.get_workarea()
         width, height = self.get_size()
-        x = wa.x + wa.width - width - config.MARGIN
-        y = wa.y + wa.height - height - config.MARGIN
+        margin = config.MARGIN
+
+        if config.CORNER.endswith('left'):
+            x = area.x + margin
+        else:
+            x = area.x + area.width - width - margin
+
+        if config.CORNER.startswith('top'):
+            y = area.y + margin
+        else:
+            y = area.y + area.height - height - margin
+
         return x, y
 
     def _server_time(self):
