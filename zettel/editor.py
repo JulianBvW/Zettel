@@ -5,9 +5,10 @@ import time
 import gi
 
 gi.require_version('Gtk', '3.0')
+gi.require_version('Gdk', '3.0')
 gi.require_version('GtkSource', '4')
 gi.require_version('Pango', '1.0')
-from gi.repository import GLib, Gtk, GtkSource, Pango  # noqa: E402
+from gi.repository import Gdk, GLib, Gtk, GtkSource, Pango  # noqa: E402
 
 from . import config, notes  # noqa: E402
 
@@ -45,6 +46,8 @@ class EditorView(Gtk.ScrolledWindow):
         # Overlay scrolling on purpose: the scrollbar floats above the right
         # padding instead of taking layout space, so the text never shifts
         # when it appears or goes away.
+        self.view.connect('button-press-event', self._on_button_press)
+
         self.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
         self.set_overlay_scrolling(True)
         self.add(self.view)
@@ -130,14 +133,6 @@ class EditorView(Gtk.ScrolledWindow):
         self.view.set_buffer(self._buffer_for(path))
         self._log(f'opened {path.name}')
 
-    def open_latest(self):
-        '''Whatever was written last. Falls back to a new note.'''
-        path = notes.latest()
-        if path is None:
-            self.open_new()
-        else:
-            self.open_note(path)
-
     def open_new(self):
         self._cancel_autosave()
         self._path = None
@@ -184,6 +179,18 @@ class EditorView(Gtk.ScrolledWindow):
             self._loaded_mtime.pop(self._path, None)
         self._log(f'saved {self._path.name}')
 
+    def forget_buffer(self, path):
+        '''Drop the cached buffer for a note, leaving the file alone.
+
+        For a note deleted from the list: without this its buffer, and the
+        undo history inside it, would sit in memory describing a note that is
+        no longer there.
+        '''
+        self._buffers.pop(path, None)
+        self._loaded_mtime.pop(path, None)
+        if self._path == path:
+            self._path = None
+
     def _forget(self, path):
         if path is None:
             return
@@ -191,6 +198,36 @@ class EditorView(Gtk.ScrolledWindow):
         self._buffers.pop(path, None)
         self._loaded_mtime.pop(path, None)
         self._log(f'discarded {path.name}')
+
+    def _on_button_press(self, view, event):
+        '''Right click copies a selection, or pastes when there is none.
+
+        The same gesture Ghostty uses, and it replaces GTK's context menu
+        outright -- returning True keeps the menu from ever appearing. Cut,
+        copy, paste and select-all stay on the keyboard.
+        '''
+        if event.button != Gdk.BUTTON_SECONDARY:
+            return False
+
+        buffer = view.get_buffer()
+        clipboard = view.get_clipboard(Gdk.SELECTION_CLIPBOARD)
+
+        if buffer.get_has_selection():
+            # Not placing the cursor here: that would drop the very selection
+            # about to be copied.
+            buffer.copy_clipboard(clipboard)
+        else:
+            # Unlike a terminal this has a cursor, so put it where the click
+            # was. Text appearing somewhere other than where you pointed
+            # would be a surprise.
+            bx, by = view.window_to_buffer_coords(
+                Gtk.TextWindowType.TEXT, int(event.x), int(event.y))
+            found, position = view.get_iter_at_location(bx, by)
+            if found:
+                buffer.place_cursor(position)
+            buffer.paste_clipboard(clipboard, None, True)
+
+        return True
 
     def _on_changed(self, _buffer):
         self._cancel_autosave()

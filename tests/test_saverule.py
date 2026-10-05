@@ -40,6 +40,11 @@ def set_text(text):
     ed.view.get_buffer().set_text(text)
 
 
+def open_latest(editor):
+    '''What F4 used to do before there was a list to open instead.'''
+    editor.open_note(notes.latest())
+
+
 section('1) A new note with content -- the file appears on leaving')
 ed.open_new()
 set_text('Shopping\nMilk, bread')
@@ -49,14 +54,14 @@ check('exactly one file', len(files()) == 1, files())
 first = NOTES_DIR / files()[0]
 check('content is right', notes.load(first) == 'Shopping\nMilk, bread')
 
-section('2) open_latest loads it back')
-ed.open_latest()
+section('2) the most recent note loads back')
+open_latest(ed)
 check('text is there again', ed.text == 'Shopping\nMilk, bread', repr(ed.text))
 
 section('3) A note FROM DISK: undo must not empty it')
 # As after a restart: the file exists but has never been in a buffer.
 fresh = EditorView(verbose=False)
-fresh.open_latest()
+open_latest(fresh)
 buffer = fresh.view.get_buffer()
 check('text loaded', fresh.text == 'Shopping\nMilk, bread', repr(fresh.text))
 check('can_undo is False', not buffer.can_undo())
@@ -66,11 +71,11 @@ ed.open_new()
 buffer = ed.view.get_buffer()
 buffer.insert_at_cursor('First line')
 ed.commit()                 # like F4 closing
-ed.open_latest()            # like F4 opening
+open_latest(ed)            # like F4 opening
 check('same buffer', ed.view.get_buffer() is buffer)
 check('can still undo', ed.view.get_buffer().can_undo())
 ed.commit(discard=True)
-ed.open_latest()            # back on the note from step 1
+open_latest(ed)            # back on the note from step 1
 
 section('4) Emptying it and leaving deletes the note')
 set_text('')
@@ -94,7 +99,7 @@ ed.open_new()
 set_text('stays for now')
 ed.commit()
 check('created', len(files()) == 1, files())
-ed.open_latest()
+open_latest(ed)
 ed.commit(discard=True)
 check('deleted', files() == [], files())
 

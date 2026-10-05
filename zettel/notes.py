@@ -11,6 +11,8 @@ line of the text is title enough.
 from collections import namedtuple
 from datetime import datetime
 
+from gi.repository import Gio, GLib
+
 from . import config
 
 # What the list needs to draw one row. `changed` is an mtime, the same number
@@ -67,7 +69,11 @@ def latest():
 def load(path):
     # A note edited elsewhere may not be valid UTF-8. Showing it with a
     # replacement character beats refusing to open it.
-    return path.read_text(encoding='utf-8', errors='replace')
+    try:
+        return path.read_text(encoding='utf-8', errors='replace')
+    except OSError:
+        # Deleted from under us between the listing and the keystroke.
+        return ''
 
 
 def save(path, text):
@@ -132,3 +138,21 @@ def discard(path):
     '''Delete a note. Already gone is fine -- that is the wanted end state.'''
     if path is not None:
         path.unlink(missing_ok=True)
+
+
+def trash(path):
+    '''Move a note to the desktop trash. True if it is gone afterwards.
+
+    The trash rather than discard(), because Delete is a single keystroke on
+    a highlighted row and has to be taken back. The save rule stays final by
+    contrast: emptying a note before leaving is a decision in itself.
+    '''
+    try:
+        Gio.File.new_for_path(str(path)).trash(None)
+        return True
+    except GLib.Error:
+        if not path.exists():
+            return True  # someone else got there first; same end state
+        # No trash on this filesystem. Deleting outright instead would answer
+        # a different question than the one that was asked.
+        return False

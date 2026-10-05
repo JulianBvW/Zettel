@@ -10,7 +10,7 @@ gi.require_version('Gtk', '3.0')
 gi.require_version('Gdk', '3.0')
 from gi.repository import Gdk, GLib, Gtk  # noqa: E402
 
-from . import config, grips, state  # noqa: E402
+from . import config, grips, notes, state  # noqa: E402
 from .editor import EditorView  # noqa: E402
 from .notelist import ListView  # noqa: E402
 
@@ -82,6 +82,7 @@ class ZettelWindow(Gtk.Window):
         self.list = ListView(verbose=verbose)
         self.list.on_choose = self.open_note
         self.list.on_new = self.new_note
+        self.list.on_delete = self.delete_note
 
         # Two contents, one window. The stack swaps them without a new window,
         # without a rebuild and without a change in size -- so switching views
@@ -263,14 +264,14 @@ class ZettelWindow(Gtk.Window):
     def _editing(self):
         return self._stack.get_visible_child_name() == 'editor'
 
-    def show_list(self, mark=None):
+    def show_list(self, mark=None, index=None):
         '''Show the list, cursor on `mark`.
 
         With no notes at all the list would be an empty rectangle and a dead
         end for anyone who does not know the ` key by heart, so that case
         goes straight into a new note instead.
         '''
-        if not self.list.reload(mark):
+        if not self.list.reload(mark, index):
             self.new_note()
             return
         self._stack.set_visible_child_name('list')
@@ -282,9 +283,30 @@ class ZettelWindow(Gtk.Window):
         self._focus_view()
 
     def open_note(self, path):
+        if not path.exists():
+            # Deleted from somewhere else between the list being built and
+            # the key being pressed. Show the list again -- it now agrees.
+            self._log(f'{path.name} is gone, back to the list')
+            self.show_list()
+            return
         self.editor.open_note(path)
         self._stack.set_visible_child_name('editor')
         self._focus_view()
+
+    def delete_note(self, path, index):
+        '''Delete from the list: into the trash, no questions asked.
+
+        No confirmation, because nothing is lost -- a wrong Delete is undone
+        in the file manager. And no report when it fails either: the list is
+        rebuilt either way, so a row still sitting there says it plainly
+        enough.
+        '''
+        if notes.trash(path):
+            self.editor.forget_buffer(path)
+            self._log(f'{path.name} to the trash')
+        else:
+            self._log(f'could not trash {path.name}')
+        self.show_list(index=index)
 
     def back_to_list(self, discard=False):
         '''Alt+Left: the same save rule as F4, but back instead of away.'''

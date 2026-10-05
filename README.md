@@ -8,6 +8,8 @@ away, or keep on your desk for a fortnight.
 `F4` brings it up, `F4` puts it away. In between, it still says whatever it
 said last time.
 
+![The list of notes, floating over a blurred desktop](docs/screenshot.png)
+
 ## Why
 
 For the note that lives two minutes, and for the one that stays two weeks.
@@ -26,9 +28,11 @@ you close it.
 | `F4` | open → list of notes · when open: close |
 | `1`–`9` | open that note |
 | `` ` `` | new note |
+| `Del` | put that note in the trash |
 | `Shift`+`F4` | straight into a new note, skipping the list |
 | `Alt`+`←` | back to the list |
 | `Esc` | close |
+| right click | copy if something is selected, otherwise paste |
 
 There is also an icon in the panel: left click opens and closes it, right
 click offers the notes folder and a way to quit. It is there for the day the
@@ -39,7 +43,10 @@ how big you made it are remembered, in `~/.config/zettel/state.json`.
 
 Leaving saves the note if there is anything in it, and drops it if there
 isn't. Holding `Shift` always discards. Emptying a note and closing it deletes
-it — that is the only way to delete, and it needs no button.
+it for good — no button, no question.
+
+`Del` in the list is the findable way to get rid of one. That one goes to the
+desktop trash, because it is a single keystroke and ought to be taken back.
 
 ## Why it stays running
 
@@ -56,6 +63,10 @@ Python 3, GTK 3, GtkSourceView — nothing a Linux Mint system doesn't already
 have.
 
 Notes are stored as plain text in `~/Notizen/`.
+
+## Licence
+
+MIT. See [LICENSE](LICENSE).
 
 ## Blur, if you want it
 
@@ -107,6 +118,7 @@ Work in progress, but usable. Every key in the table above works, the list is
 there — notes sorted by when you last changed them, titled by their own first
 line — and the window looks the way it is meant to.
 
-Still to come: deleting a note straight from the list, right-click to copy and
-paste the way a terminal does, and a setup script so it can be installed
-somewhere other than the machine it was written on.
+Everything in the table above works. Still to come is a setup script, so it
+can be installed somewhere other than the machine it was written on: the notes
+folder is named in German, the window size suits one particular screen, and
+the shortcut is wired up by hand.

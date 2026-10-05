@@ -42,6 +42,7 @@ class ListView(Gtk.ScrolledWindow):
         # there are two of them and they carry a Path.
         self.on_choose = None
         self.on_new = None
+        self.on_delete = None
 
         self.rows = Gtk.ListBox()
         self.rows.set_selection_mode(Gtk.SelectionMode.BROWSE)
@@ -59,8 +60,12 @@ class ListView(Gtk.ScrolledWindow):
 
     # -- filling it ------------------------------------------------------
 
-    def reload(self, mark=None):
+    def reload(self, mark=None, index=None):
         '''Rebuild every row. Returns False when there is no note at all.
+
+        The cursor goes on `mark` if that note is still there, otherwise on
+        row `index` -- which is how deleting leaves it sitting on the note
+        that moved up into the gap, so a second Delete carries on from there.
 
         Rebuilding rather than patching: with a handful of notes it costs
         nothing, and it leaves no room for the question whether what is on
@@ -72,8 +77,10 @@ class ListView(Gtk.ScrolledWindow):
 
         cursor = None
         count = 0
-        for index, note in enumerate(notes.overview()):
-            row = self._make_row(index, note)
+        # Not `index` -- that is the parameter, and shadowing it here left the
+        # cursor on the last row every time.
+        for position, note in enumerate(notes.overview()):
+            row = self._make_row(position, note)
             self.rows.add(row)
             if note.path == mark:
                 cursor = row
@@ -81,6 +88,8 @@ class ListView(Gtk.ScrolledWindow):
 
         self.rows.show_all()
 
+        if cursor is None and index is not None and count:
+            cursor = self.rows.get_row_at_index(min(index, count - 1))
         if cursor is None:
             cursor = self.rows.get_row_at_index(0)
         if cursor is not None:
@@ -129,9 +138,15 @@ class ListView(Gtk.ScrolledWindow):
     # -- input -----------------------------------------------------------
 
     def handle_key(self, event):
-        '''Digits and the new-note key. Arrows and Enter are the ListBox's.'''
+        '''Digits, the new-note key, Delete. Arrows and Enter are the
+        ListBox's own.
+        '''
         if event.keyval in DIGITS:
             self._choose_index(DIGITS[event.keyval])
+            return True
+
+        if event.keyval in (Gdk.KEY_Delete, Gdk.KEY_KP_Delete):
+            self._delete_cursor_row()
             return True
 
         if event.hardware_keycode == NEW_NOTE_KEYCODE \
@@ -148,6 +163,14 @@ class ListView(Gtk.ScrolledWindow):
             self._choose(row)
         # No row there: swallow the key anyway. There is nothing else a digit
         # could mean here, and a stray beep is worse than nothing happening.
+
+    def _delete_cursor_row(self):
+        '''Throw away the note under the cursor. Only here, never in the
+        editor, where Delete still removes characters.
+        '''
+        row = self.rows.get_selected_row()
+        if row is not None and self.on_delete is not None:
+            self.on_delete(row.path, row.get_index())
 
     def _on_row_activated(self, _listbox, row):
         self._choose(row)
